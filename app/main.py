@@ -1,17 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.documents import router as documents_router
-from app.api.health import router as health_router
+from app.api.chunks import (
+    router as chunks_router,
+)
+from app.api.documents import (
+    router as documents_router,
+)
+from app.api.health import (
+    router as health_router,
+)
 from app.core.config import settings
 
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.1.0",
+    version="0.2.0",
     description=(
-        "Backend API for the Team B AI Paper Agent. "
-        "Current phase: AWS RDS Core Corpus access."
+        "Backend API for the Team B "
+        "AI Paper Agent. "
+        "Current phase: "
+        "Core Corpus and Core Chunk access."
     ),
 )
 
@@ -35,6 +44,11 @@ app.include_router(
     prefix=settings.api_prefix,
 )
 
+app.include_router(
+    chunks_router,
+    prefix=settings.api_prefix,
+)
+
 
 @app.get("/")
 def root() -> dict:
@@ -44,4 +58,5 @@ def root() -> dict:
         "api_prefix": settings.api_prefix,
         "docs": "/docs",
         "status": "running",
+        "backend_stage": "B3-core-chunks",
     }
