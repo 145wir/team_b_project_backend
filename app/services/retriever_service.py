@@ -168,31 +168,48 @@ def _mock_retrieve_candidates(
 def _real_retrieve_candidates(
     request: RetrievalRequest,
 ) -> RetrieverResult:
-    """
-    진형근 RAG Retrieval Core의 public interface가
-    GitHub에 통합되면 이 함수만 실제 구현으로 교체한다.
 
-    최종 구조:
-
-        Title + Idea
-            ↓
-        Shared RAG Core
-            ↓
-        TF-IDF
-            ↓
-        SVD-256
-            ↓
-        AWS RDS pgvector
-            ↓
-        Candidate Top-N
-    """
-
-    raise RetrieverServiceError(
-        "Real RAG Retriever is not connected yet. "
-        "Set RETRIEVER_MODE=mock for Backend "
-        "pipeline testing."
+    rows = rag_retrieve_candidates(
+        title=request.title,
+        research_idea=(
+            request.research_idea
+            or ""
+        ),
+        candidate_k=(
+            settings.retrieval_candidate_k
+        ),
     )
 
+    candidates = [
+        RetrievalCandidate(
+            retriever_rank=row["rank"],
+            chunk_id=row["chunk_id"],
+            document_id=row["document_id"],
+            chunk_index=row["chunk_index"],
+            section_index=row.get("section_index"),
+            section_heading=row.get("section_heading"),
+            chunk_text=row["chunk_text"],
+            document_title=row["title"],
+            source=row["source"],
+            source_id=row["source_id"],
+            topic_axis=row["topic_axis"],
+            cosine_similarity=row["cosine_similarity"],
+            quality_score=row.get("quality_score"),
+        )
+        for row in rows
+    ]
+
+    return RetrieverResult(
+        title=request.title,
+        research_idea=request.research_idea,
+        candidate_count=len(candidates),
+        retriever_version="실제 버전",
+        embedding_version=(
+            "core100_tfidf_svd_256_v1"
+        ),
+        vector_dimension=256,
+        candidates=candidates,
+    )
 
 # ============================================================
 # Public Interface

@@ -123,7 +123,7 @@ class ScoredCandidate:
 
 
 TOKEN_PATTERN = re.compile(
-    r"[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)*"
+    r"[A-Za-z0-9가-힣]+(?:[-_][A-Za-z0-9가-힣]+)*"
 )
 
 
@@ -321,16 +321,16 @@ def _score_candidates(
     if not candidates:
         return []
 
-    query_text = (
-        _build_query_text(
-            request
-        )
+    query_text = _build_query_text(
+        request
     )
 
-    query_tokens = (
-        _tokenize(
-            query_text
-        )
+    query_tokens = _tokenize(
+        query_text
+    )
+
+    user_title_tokens = _tokenize(
+        request.title
     )
 
     cosine_values = [
@@ -377,11 +377,9 @@ def _score_candidates(
             )
         )
 
-        title_score = (
-            _query_coverage_score(
-                query_tokens,
-                title_tokens,
-            )
+        title_score = _query_coverage_score(
+            user_title_tokens,
+            title_tokens,
         )
 
         quality_score = (

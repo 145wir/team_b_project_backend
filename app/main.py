@@ -131,6 +131,6 @@ def root() -> dict:
             "draft": True,
             "mock_generator": True,
             "own_transformer": False,
-            "validator": False,
+            "validator": True,
         },
     }

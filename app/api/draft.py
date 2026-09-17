@@ -67,9 +67,9 @@ def create_draft(
         ↓
     MockGenerator
         ↓
+    Validator
+        ↓
     Structured Paper JSON
-
-    Validator는 아직 연결하지 않는다.
     """
 
     try:
