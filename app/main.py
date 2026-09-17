@@ -10,20 +10,31 @@ from app.api.documents import (
 from app.api.health import (
     router as health_router,
 )
+from app.api.retrieve import (
+    router as retrieve_router,
+)
 from app.core.config import settings
 
 
+# ============================================================
+# FastAPI Application
+# ============================================================
+
 app = FastAPI(
     title=settings.app_name,
-    version="0.2.0",
+    version="0.3.0",
     description=(
-        "Backend API for the Team B "
-        "AI Paper Agent. "
+        "Backend API for the Team B AI Paper Agent. "
         "Current phase: "
-        "Core Corpus and Core Chunk access."
+        "Core Corpus + Core Chunks + "
+        "Retriever + Reranker."
     ),
 )
 
+
+# ============================================================
+# CORS
+# ============================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,6 +44,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ============================================================
+# Routers
+# ============================================================
 
 app.include_router(
     health_router,
@@ -49,6 +64,15 @@ app.include_router(
     prefix=settings.api_prefix,
 )
 
+app.include_router(
+    retrieve_router,
+    prefix=settings.api_prefix,
+)
+
+
+# ============================================================
+# Root
+# ============================================================
 
 @app.get("/")
 def root() -> dict:
@@ -58,5 +82,15 @@ def root() -> dict:
         "api_prefix": settings.api_prefix,
         "docs": "/docs",
         "status": "running",
-        "backend_stage": "B3-core-chunks",
+        "backend_stage": (
+            "B4-retriever-reranker"
+        ),
+        "features": {
+            "documents": True,
+            "chunks": True,
+            "retriever": True,
+            "reranker": True,
+            "generator": False,
+            "validator": False,
+        },
     }
