@@ -1,35 +1,10 @@
 from __future__ import annotations
 
-import json
-import logging
-import os
-import subprocess
-from pathlib import Path
-from typing import Any
-
+from app.core.config import settings
 from app.schemas.retrieval import (
     RetrievalCandidate,
     RetrievalRequest,
     RetrieverResult,
-)
-
-
-logger = logging.getLogger(
-    __name__
-)
-
-
-# ============================================================
-# Environment defaults
-# ============================================================
-
-
-DEFAULT_CANDIDATE_K = 20
-
-DEFAULT_TIMEOUT_SECONDS = 90
-
-DEFAULT_RAG_BRIDGE_MODULE = (
-    "app.rag_bridge"
 )
 
 
@@ -42,7 +17,7 @@ class RetrieverServiceError(
     RuntimeError
 ):
     """
-    Frozen Retriever 호출 실패.
+    Retriever 실행 실패.
     """
 
 
@@ -50,265 +25,177 @@ class RetrieverTimeoutError(
     RetrieverServiceError
 ):
     """
-    Frozen Retriever timeout.
+    Retriever timeout.
+
+    실제 RAG Core 연결 후 사용한다.
     """
 
 
 # ============================================================
-# Environment helpers
+# Mock Retriever
 # ============================================================
 
 
-def _get_required_env(
-    name: str,
-) -> str:
-    value = os.getenv(
-        name,
-        "",
-    ).strip()
-
-    if not value:
-        raise RetrieverServiceError(
-            f"Required environment variable "
-            f"{name} is not configured."
-        )
-
-    return value
-
-
-def _get_rag_project_root() -> Path:
-    value = _get_required_env(
-        "RAG_PROJECT_ROOT"
-    )
-
-    root = (
-        Path(value)
-        .expanduser()
-        .resolve()
-    )
-
-    if not root.exists():
-        raise RetrieverServiceError(
-            "RAG project root does not exist."
-        )
-
-    if not root.is_dir():
-        raise RetrieverServiceError(
-            "RAG project root is not a directory."
-        )
-
-    bridge_file = (
-        root
-        / "app"
-        / "rag_bridge.py"
-    )
-
-    retriever_file = (
-        root
-        / "app"
-        / "rag_retriever.py"
-    )
-
-    if not bridge_file.is_file():
-        raise RetrieverServiceError(
-            "app/rag_bridge.py was not found "
-            "in the RAG project."
-        )
-
-    if not retriever_file.is_file():
-        raise RetrieverServiceError(
-            "app/rag_retriever.py was not found "
-            "in the RAG project."
-        )
-
-    return root
-
-
-def _get_rag_python() -> Path:
-    value = _get_required_env(
-        "RAG_PYTHON_EXECUTABLE"
-    )
-
-    python_executable = (
-        Path(value)
-        .expanduser()
-        .resolve()
-    )
-
-    if not python_executable.is_file():
-        raise RetrieverServiceError(
-            "RAG Python executable "
-            "does not exist."
-        )
-
-    return python_executable
-
-
-def _get_candidate_k(
-    requested_top_k: int,
-) -> int:
-    raw = os.getenv(
-        "RETRIEVAL_CANDIDATE_K",
-        str(DEFAULT_CANDIDATE_K),
-    )
-
-    try:
-        candidate_k = int(
-            raw
-        )
-
-    except ValueError as exc:
-        raise RetrieverServiceError(
-            "RETRIEVAL_CANDIDATE_K "
-            "must be an integer."
-        ) from exc
-
-    # 최종 Top-K보다 Candidate 수가 적으면 안 된다.
-    candidate_k = max(
-        candidate_k,
-        requested_top_k,
-    )
-
-    return candidate_k
-
-
-def _get_timeout_seconds() -> int:
-    raw = os.getenv(
-        "RAG_BRIDGE_TIMEOUT_SECONDS",
-        str(DEFAULT_TIMEOUT_SECONDS),
-    )
-
-    try:
-        timeout = int(
-            raw
-        )
-
-    except ValueError as exc:
-        raise RetrieverServiceError(
-            "RAG_BRIDGE_TIMEOUT_SECONDS "
-            "must be an integer."
-        ) from exc
-
-    if timeout < 1:
-        raise RetrieverServiceError(
-            "RAG bridge timeout must "
-            "be greater than zero."
-        )
-
-    return timeout
-
-
-# ============================================================
-# Bridge response normalization
-# ============================================================
-
-
-def _normalize_candidate(
-    row: dict[str, Any],
-) -> RetrievalCandidate:
+def _mock_retrieve_candidates(
+    request: RetrievalRequest,
+) -> RetrieverResult:
     """
-    rag_bridge evidence를
-    Backend 내부 Candidate 형태로 변환한다.
+    실제 RAG Core가 Backend에 통합되기 전까지
+    HTTP End-to-End 파이프라인을 검증하기 위한
+    개발용 Mock Retriever.
+
+    절대 실제 검색 결과로 간주하지 않는다.
     """
 
-    return RetrievalCandidate(
-        retriever_rank=int(
-            row["rank"]
+    candidates = [
+        RetrievalCandidate(
+            retriever_rank=1,
+            chunk_id=900001,
+            document_id=9001,
+            chunk_index=0,
+            section_index=1,
+            section_heading="Introduction",
+            chunk_text=(
+                "Deep-space spacecraft require increased "
+                "onboard autonomy because long communication "
+                "delays can prevent immediate intervention "
+                "from ground operators."
+            ),
+            document_title=(
+                "Autonomous Decision-Making "
+                "for Deep-Space Missions"
+            ),
+            source="ntrs",
+            source_id="MOCK-NTRS-001",
+            topic_axis="onboard_ai",
+            cosine_similarity=0.72,
+            quality_score=0.95,
         ),
 
-        chunk_id=int(
-            row["chunk_id"]
+        RetrievalCandidate(
+            retriever_rank=2,
+            chunk_id=900002,
+            document_id=9002,
+            chunk_index=1,
+            section_index=2,
+            section_heading="Autonomous Operations",
+            chunk_text=(
+                "Onboard artificial intelligence can support "
+                "spacecraft monitoring, planning, and autonomous "
+                "decision-making when continuous communication "
+                "with Earth is unavailable."
+            ),
+            document_title=(
+                "Onboard Artificial Intelligence "
+                "for Autonomous Spacecraft Operations"
+            ),
+            source="arxiv",
+            source_id="MOCK-ARXIV-002",
+            topic_axis="onboard_ai",
+            cosine_similarity=0.69,
+            quality_score=0.93,
         ),
 
-        document_id=int(
-            row["document_id"]
+        RetrievalCandidate(
+            retriever_rank=3,
+            chunk_id=900003,
+            document_id=9003,
+            chunk_index=2,
+            section_index=3,
+            section_heading="Fault Management",
+            chunk_text=(
+                "Autonomous fault detection and recovery "
+                "can reduce dependence on real-time ground "
+                "control during spacecraft operations."
+            ),
+            document_title=(
+                "Autonomous Fault Management "
+                "for Space Systems"
+            ),
+            source="ntrs",
+            source_id="MOCK-NTRS-003",
+            topic_axis="satellite_autonomy",
+            cosine_similarity=0.64,
+            quality_score=0.91,
         ),
 
-        chunk_index=int(
-            row.get(
-                "chunk_index",
-                0,
-            )
+        RetrievalCandidate(
+            retriever_rank=4,
+            chunk_id=900004,
+            document_id=9004,
+            chunk_index=0,
+            section_index=1,
+            section_heading="Navigation",
+            chunk_text=(
+                "Autonomous navigation allows robotic systems "
+                "to make local decisions under uncertain "
+                "environmental conditions."
+            ),
+            document_title=(
+                "Autonomous Navigation "
+                "in Uncertain Environments"
+            ),
+            source="arxiv",
+            source_id="MOCK-ARXIV-004",
+            topic_axis="rover_autonomy",
+            cosine_similarity=0.57,
+            quality_score=0.89,
         ),
+    ]
 
-        section_index=(
-            int(
-                row["section_index"]
-            )
-            if row.get(
-                "section_index"
-            )
-            is not None
-            else None
+    return RetrieverResult(
+        title=request.title,
+        research_idea=request.research_idea,
+        candidate_count=len(
+            candidates
         ),
-
-        section_heading=(
-            str(
-                row.get(
-                    "section_heading",
-                    "",
-                )
-            ).strip()
-            or None
+        retriever_version=(
+            "mock_retriever_v1"
         ),
-
-        chunk_text=str(
-            row.get(
-                "chunk_text",
-                "",
-            )
-        ).strip(),
-
-        document_title=str(
-            row.get(
-                "document_title",
-                row.get(
-                    "title",
-                    "",
-                ),
-            )
-        ).strip(),
-
-        source=str(
-            row.get(
-                "source",
-                "",
-            )
-        ).strip(),
-
-        source_id=str(
-            row.get(
-                "source_id",
-                "",
-            )
-        ).strip(),
-
-        topic_axis=str(
-            row.get(
-                "topic_axis",
-                "",
-            )
-        ).strip(),
-
-        cosine_similarity=float(
-            row["cosine_similarity"]
+        embedding_version=(
+            "mock_svd256"
         ),
-
-        quality_score=(
-            float(
-                row["quality_score"]
-            )
-            if row.get(
-                "quality_score"
-            )
-            is not None
-            else None
-        ),
+        vector_dimension=256,
+        candidates=candidates,
     )
 
 
 # ============================================================
-# Public service
+# Real Retriever placeholder
+# ============================================================
+
+
+def _real_retrieve_candidates(
+    request: RetrievalRequest,
+) -> RetrieverResult:
+    """
+    진형근 RAG Retrieval Core의 public interface가
+    GitHub에 통합되면 이 함수만 실제 구현으로 교체한다.
+
+    최종 구조:
+
+        Title + Idea
+            ↓
+        Shared RAG Core
+            ↓
+        TF-IDF
+            ↓
+        SVD-256
+            ↓
+        AWS RDS pgvector
+            ↓
+        Candidate Top-N
+    """
+
+    raise RetrieverServiceError(
+        "Real RAG Retriever is not connected yet. "
+        "Set RETRIEVER_MODE=mock for Backend "
+        "pipeline testing."
+    )
+
+
+# ============================================================
+# Public Interface
 # ============================================================
 
 
@@ -316,255 +203,38 @@ def retrieve_candidates(
     request: RetrievalRequest,
 ) -> RetrieverResult:
     """
-    Frozen Vector Retriever를 호출해
-    Candidate Top-N을 가져온다.
+    Backend에서 사용하는 Retriever 단일 진입점.
 
-    이 함수에서는 절대로:
+    현재:
+        RETRIEVER_MODE=mock
 
-        TfidfVectorizer.fit()
-        TruncatedSVD.fit()
-        pgvector rebuild
-        quality gate 재구현
-        reranking
-
-    을 하지 않는다.
+    향후:
+        RETRIEVER_MODE=real
     """
 
-    rag_root = (
-        _get_rag_project_root()
-    )
-
-    rag_python = (
-        _get_rag_python()
-    )
-
-    candidate_k = (
-        _get_candidate_k(
-            requested_top_k=(
-                request.top_k
-            )
-        )
-    )
-
-    timeout_seconds = (
-        _get_timeout_seconds()
-    )
-
-    bridge_module = os.getenv(
-        "RAG_BRIDGE_MODULE",
-        DEFAULT_RAG_BRIDGE_MODULE,
-    ).strip()
-
-    if not bridge_module:
-        bridge_module = (
-            DEFAULT_RAG_BRIDGE_MODULE
-        )
-
-    request_payload = {
-        "title": (
-            request.title
-        ),
-
-        "research_idea": (
-            request.research_idea
-            or ""
-        ),
-
-        # 중요:
-        # 최종 top_k가 아니라
-        # reranker에 넘길 Candidate 수를 요청한다.
-        "top_k": (
-            candidate_k
-        ),
-    }
-
-    command = [
-        str(
-            rag_python
-        ),
-
-        "-X",
-        "utf8",
-
-        "-m",
-        bridge_module,
-    ]
-
-    process_environment = (
-        os.environ.copy()
-    )
-
-    process_environment[
-        "PYTHONIOENCODING"
-    ] = "utf-8"
-
-    try:
-        completed = subprocess.run(
-            command,
-
-            cwd=str(
-                rag_root
-            ),
-
-            input=json.dumps(
-                request_payload,
-                ensure_ascii=False,
-            ),
-
-            text=True,
-            encoding="utf-8",
-
-            capture_output=True,
-
-            timeout=timeout_seconds,
-
-            check=False,
-
-            env=process_environment,
-        )
-
-    except subprocess.TimeoutExpired as exc:
-        logger.exception(
-            "Frozen Retriever timed out."
-        )
-
-        raise RetrieverTimeoutError(
-            "Retriever timed out."
-        ) from exc
-
-    except OSError as exc:
-        logger.exception(
-            "Unable to start Frozen Retriever."
-        )
-
-        raise RetrieverServiceError(
-            "Unable to start Retriever process."
-        ) from exc
-
-    if completed.returncode != 0:
-        logger.error(
-            (
-                "Frozen Retriever failed. "
-                "returncode=%s\n"
-                "stderr=%s"
-            ),
-            completed.returncode,
-            completed.stderr[
-                :5000
-            ],
-        )
-
-        raise RetrieverServiceError(
-            "Frozen Retriever failed."
-        )
-
-    raw_stdout = (
-        completed.stdout
+    mode = (
+        settings
+        .retriever_mode
         .strip()
+        .lower()
     )
 
-    if not raw_stdout:
-        logger.error(
-            (
-                "Frozen Retriever returned "
-                "empty stdout.\n"
-                "stderr=%s"
-            ),
-            completed.stderr[
-                :5000
-            ],
-        )
-
-        raise RetrieverServiceError(
-            "Retriever returned "
-            "an empty response."
-        )
-
-    try:
-        payload = json.loads(
-            raw_stdout
-        )
-
-    except json.JSONDecodeError as exc:
-        logger.error(
-            (
-                "Frozen Retriever returned "
-                "invalid JSON.\n"
-                "stdout=%s\n"
-                "stderr=%s"
-            ),
-            raw_stdout[
-                :5000
-            ],
-            completed.stderr[
-                :5000
-            ],
-        )
-
-        raise RetrieverServiceError(
-            "Retriever returned "
-            "invalid JSON."
-        ) from exc
-
-    evidence_rows = (
-        payload.get(
-            "evidence",
-            []
-        )
-    )
-
-    if not isinstance(
-        evidence_rows,
-        list,
-    ):
-        raise RetrieverServiceError(
-            "Retriever response field "
-            "'evidence' must be a list."
-        )
-
-    candidates = [
-        _normalize_candidate(
-            row
-        )
-        for row
-        in evidence_rows
-    ]
-
-    return RetrieverResult(
-        title=(
-            request.title
-        ),
-
-        research_idea=(
-            request.research_idea
-        ),
-
-        candidate_count=(
-            len(
-                candidates
+    if mode == "mock":
+        return (
+            _mock_retrieve_candidates(
+                request
             )
-        ),
+        )
 
-        retriever_version=str(
-            payload.get(
-                "retriever_version",
-                "unknown",
+    if mode == "real":
+        return (
+            _real_retrieve_candidates(
+                request
             )
-        ),
+        )
 
-        embedding_version=str(
-            payload.get(
-                "embedding_version",
-                "unknown",
-            )
-        ),
-
-        vector_dimension=int(
-            payload.get(
-                "vector_dimension",
-                256,
-            )
-        ),
-
-        candidates=candidates,
+    raise RetrieverServiceError(
+        "Invalid RETRIEVER_MODE. "
+        "Use 'mock' or 'real'. "
+        f"Current value: {mode!r}"
     )
